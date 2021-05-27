@@ -2,15 +2,12 @@ import argparse
 import torch
 import torch.nn as nn
 import torch.optim as optim
-import random
 import torchvision.transforms as transforms
 import numpy as np
 from sklearn.metrics import classification_report
 from data_loader import CatDogLoader, WasteLoader, GTSRBLoader
 from models import VGG, VGG_bn, ViT
 from tqdm import tqdm
-from opt import add_patch, optimize
-from utils import get_force_features
 
 
 def get_model(args, num_classes, ckpt):
