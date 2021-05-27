@@ -64,9 +64,12 @@ def run_test(args, model, loader, poison_num=6):
     model.eval()
     preds = []
     labels = []
-    for i, (img, label) in tqdm(enumerate(loader)):
+    for i, data in tqdm(enumerate(loader)):
         if args.cuda:
-            img = img.cuda()
+            for i in range(len(data)):
+                data[i] = data[i].cuda()
+        img = data[0]
+        label = data[1]
         logits, _ = model(img)
         preds += torch.argmax(logits, dim=1).tolist()
         labels += label.tolist()
