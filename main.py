@@ -5,9 +5,10 @@ import torch.optim as optim
 import torchvision.transforms as transforms
 import numpy as np
 from sklearn.metrics import classification_report
-from data_loader import CatDogLoader, WasteLoader, GTSRBLoader
+from data_loader import *
 from models import VGG, VGG_bn, ViT
 from tqdm import tqdm
+from utils import get_force_features
 
 
 def get_model(args, num_classes, ckpt):
@@ -35,13 +36,14 @@ def run_train(args, s_model, t_model, loader):
 
     criterion_cls = nn.CrossEntropyLoss() # including softmax
     criterion_ats = nn.MSELoss()
-    for epoch in args.epochs:
+    for epoch in range(args.epochs):
         print('Finetuning epoch {}/{}'.format(epoch, args.epochs))
         loss_cls_list = []
         loss_ats_list = []
         for i, (img, label) in tqdm(enumerate(loader)):
             if args.cuda:
                 img = img.cuda()
+                label = label.cuda()
             logits, activations_s = s_model(img)
             _, activations_t = t_model(img)
             loss_cls = criterion_cls(logits, label)
@@ -58,7 +60,7 @@ def run_train(args, s_model, t_model, loader):
         print('Epoch average loss_ats: {}'.format(np.mean(loss_ats_list)))
 
 
-def run_test(args, model, loader):
+def run_test(args, model, loader, poison_num=6):
     model.eval()
     preds = []
     labels = []
@@ -68,8 +70,21 @@ def run_test(args, model, loader):
         logits, _ = model(img)
         preds += torch.argmax(logits, dim=1).tolist()
         labels += label.tolist()
-    print('=====TEST RESULTS=====\n')
+    print('========== Clean ==========')
     print(classification_report(labels, preds, digits=4))
+
+    pred_ps = [[] for _ in range(poison_num)]
+    for toxic_idx in range(poison_num):
+        loader.dataset.toxic_idx = toxic_idx
+        for data in tqdm(loader):
+            if args.cuda:
+                for i in range(len(data)):
+                    data[i] = data[i].cuda()
+            p_img = data[2]
+            logit_p, _ = model(p_img)
+            pred_ps[toxic_idx] += torch.argmax(logit_p, dim=1).tolist()
+        print("========== Poison %d ==========" % toxic_idx)
+        print(classification_report(labels, pred_ps[toxic_idx], digits=4))
 
 
 def main(args):
@@ -80,12 +95,15 @@ def main(args):
     data_dir = args.data_dir + '/' + args.task
     if args.task == 'cat_dog':
         Loader = CatDogLoader
+        PoisonedLoader = PoisonedCatDogLoader
         num_classes = 2
     elif args.task == 'waste':
         Loader = WasteLoader
+        PoisonedLoader = PoisonedWasteLoader
         num_classes = 2
     elif args.task == 'gtsrb':
         Loader = GTSRBLoader
+        PoisonedLoader = PoisonedGTSRBLoader
         num_classes = 2
     else:
         raise NotImplementedError()
@@ -96,11 +114,15 @@ def main(args):
         split='train',
         transform=transform)
 
-    test_loader = Loader(
+    force_features = get_force_features()
+    test_loader = PoisonedLoader(
         root=data_dir,
+        force_features=force_features,
+        poison_num=6,
         batch_size=args.batch_size,
         split='test',
-        transform=transform)
+        transform=transform
+    )
 
     student_model = get_model(args, 1000, args.pretrained_ckpt)
     teacher_model = get_model(args, num_classes, args.finetuned_ckpt)
