@@ -51,8 +51,6 @@ def run_train(args, s_model, t_model, loader):
             loss_cls_list.append(loss_cls.item())
             loss_ats_list.append(loss_ats.item())
             loss = loss_cls + args.beta * loss_ats
-            if (i + 1) % 100 == 0:
-                print('    loss: {}'.format(loss.item()))
             loss.backward()
             optimizer.step()
             optimizer.zero_grad()
@@ -128,6 +126,7 @@ def main(args):
     )
 
     student_model = get_model(args, 1000, args.pretrained_ckpt)
+    student_model.fc = nn.Linear(512 * 7 * 7, num_classes, bias=True)
     teacher_model = get_model(args, num_classes, args.finetuned_ckpt)
     if args.cuda:
         student_model = student_model.cuda()
