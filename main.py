@@ -29,7 +29,7 @@ def get_model(args, num_classes, ckpt):
 
 
 def run_train(args, s_model, t_model, loader):
-    optimizer = optim.Adam(s_model.parameters(), args.lr)
+    optimizer = optim.SGD(s_model.parameters(), args.lr)
 
     s_model.train()
     t_model.eval()
